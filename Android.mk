@@ -25,10 +25,10 @@ LOCAL_AAPT_FLAGS := \
     --version-name "$(version_name_package)" \
     --version-code $(version_code_package) \
 
-LOCAL_PACKAGE_NAME := Snap
+LOCAL_PACKAGE_NAME := Camero
 LOCAL_PRIVILEGED_MODULE := true
 
-LOCAL_AAPT_FLAGS += --rename-manifest-package org.cyanogenmod.snap
+LOCAL_AAPT_FLAGS += --rename-manifest-package org.aoscp.camero
 
 #LOCAL_SDK_VERSION := current
 LOCAL_RENDERSCRIPT_TARGET_API := 23
