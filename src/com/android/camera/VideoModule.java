@@ -84,7 +84,7 @@ import java.util.List;
 import java.util.HashMap;
 import java.lang.reflect.Method;
 
-public class VideoModule implements CameraModule,
+public class VideoModule extends BaseModule<VideoUI> implements
     VideoController,
     FocusOverlayManager.Listener,
     CameraPreference.OnPreferenceChangedListener,
@@ -208,7 +208,6 @@ public class VideoModule implements CameraModule,
     private LocationManager mLocationManager;
     private int mPendingSwitchCameraId;
     private final Handler mHandler = new MainHandler();
-    private VideoUI mUI;
     private CameraProxy mCameraDevice;
     private static final String KEY_PREVIEW_FORMAT = "preview-format";
     private static final String FORMAT_NV12_VENUS = "nv12-venus";
@@ -469,7 +468,6 @@ public class VideoModule implements CameraModule,
 
                 case SET_VIDEO_UI_PARAMS: {
                     setCameraParameters(UPDATE_PARAM_PREFERENCE);
-                    mUI.updateOnScreenIndicators(mParameters, mPreferences);
                     break;
                 }
 
@@ -793,6 +791,7 @@ public class VideoModule implements CameraModule,
 
     private void startPlayVideoActivity() {
         Intent intent = new Intent(Intent.ACTION_VIEW);
+        intent.setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
         intent.setDataAndType(mCurrentVideoUri, convertOutputFormatToMimeType(mProfile.fileFormat));
         try {
             mActivity
@@ -1268,7 +1267,6 @@ public class VideoModule implements CameraModule,
 
         mUI.initDisplayChangeListener();
         keepScreenOnAwhile();
-        mUI.updateOnScreenIndicators(mParameters, mPreferences);
         mUI.setSwitcherIndex();
 
         UsageStatistics.onContentViewChanged(
@@ -3149,19 +3147,13 @@ public class VideoModule implements CameraModule,
             forceFlashOffIfSupported(forceOff);
             mCameraDevice.setParameters(mParameters);
         }
-        mUI.updateOnScreenIndicators(mParameters, mPreferences);
     }
 
     @Override
     public void onPreviewFocusChanged(boolean previewFocused) {
-        mUI.onPreviewFocusChanged(previewFocused);
+        super.onPreviewFocusChanged(previewFocused);
         mHandler.sendEmptyMessageDelayed(HANDLE_FLASH_TORCH_DELAY, 800);
         mPreviewFocused = previewFocused;
-    }
-
-    @Override
-    public boolean arePreviewControlsVisible() {
-        return mUI.arePreviewControlsVisible();
     }
 
     private final class JpegPictureCallback implements CameraPictureCallback {
@@ -3344,20 +3336,15 @@ public class VideoModule implements CameraModule,
 
     @Override
     public void showPreviewCover() {
+        super.showPreviewCover();
         stopFaceDetection();
         mUI.getFocusRing().stopFocusAnimations();
-        mUI.showPreviewCover();
     }
 
     @Override
     public void hidePreviewCover() {
-        mUI.hidePreviewCover();
+        super.hidePreviewCover();
         startFaceDetection();
-    }
-
-    @Override
-    public void setPreviewCoverAlpha(float alpha) {
-        mUI.setPreviewCoverAlpha(alpha);
     }
 }
 

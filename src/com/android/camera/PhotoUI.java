@@ -26,7 +26,6 @@ import android.graphics.Point;
 import android.graphics.RectF;
 import android.graphics.drawable.ColorDrawable;
 import android.hardware.Camera;
-import android.hardware.Camera.Face;
 import android.os.AsyncTask;
 import android.preference.PreferenceManager;
 import android.util.Log;
@@ -106,9 +105,6 @@ public class PhotoUI extends BaseUI implements PieListener,
     private PhotoMenu mMenu;
     private MenuHelp mMenuHelp;
     private AlertDialog mLocationDialog;
-
-    // Small indicators which show the camera settings in the viewfinder.
-    private OnScreenIndicators mOnScreenIndicators;
 
     private PieRenderer mPieRenderer;
     private ZoomRenderer mZoomRenderer;
@@ -448,11 +444,6 @@ public class PhotoUI extends BaseUI implements PieListener,
         return mRootView;
     }
 
-    private void initIndicators() {
-        mOnScreenIndicators = new OnScreenIndicators(mActivity,
-                mRootView.findViewById(R.id.on_screen_indicators));
-    }
-
     public void onCameraOpened(PreferenceGroup prefGroup, ComboPreferences prefs,
             Camera.Parameters params, OnPreferenceChangedListener listener, MakeupLevelListener makeupListener) {
         if (mPieRenderer == null) {
@@ -485,7 +476,6 @@ public class PhotoUI extends BaseUI implements PieListener,
         mRenderOverlay.requestLayout();
 
         initializeZoom(params);
-        updateOnScreenIndicators(params, prefGroup, prefs);
         mActivity.setPreviewGestures(mGestures);
     }
 
@@ -574,8 +564,6 @@ public class PhotoUI extends BaseUI implements PieListener,
 
     // called from onResume but only the first time
     public void initializeFirstTime() {
-        initIndicators();
-
         // Initialize shutter button.
         mShutterButton.setImageResource(R.drawable.btn_new_shutter);
         mShutterButton.setOnClickListener(new OnClickListener() {
@@ -629,29 +617,6 @@ public class PhotoUI extends BaseUI implements PieListener,
         mMenu.overrideSettings(keyvalues);
     }
 
-    public void updateOnScreenIndicators(Camera.Parameters params,
-            PreferenceGroup group, ComboPreferences prefs) {
-        if (params == null || group == null || mOnScreenIndicators == null) return;
-        mOnScreenIndicators.updateSceneOnScreenIndicator(params.getSceneMode());
-        mOnScreenIndicators.updateExposureOnScreenIndicator(params,
-                CameraSettings.readExposure(prefs));
-        mOnScreenIndicators.updateFlashOnScreenIndicator(params.getFlashMode());
-        int wbIndex = -1;
-        String wb = Camera.Parameters.WHITE_BALANCE_AUTO;
-        if (Camera.Parameters.SCENE_MODE_AUTO.equals(params.getSceneMode())) {
-            wb = params.getWhiteBalance();
-        }
-        ListPreference pref = group.findPreference(CameraSettings.KEY_WHITE_BALANCE);
-        if (pref != null) {
-            wbIndex = pref.findIndexOfValue(wb);
-        }
-        // make sure the correct value was found
-        // otherwise use auto index
-        mOnScreenIndicators.updateWBIndicator(wbIndex < 0 ? 2 : wbIndex);
-        boolean location = RecordLocationPreference.get(prefs);
-        mOnScreenIndicators.updateLocationIndicator(location);
-    }
-
     public void setAutoHdrEnabled(boolean enabled) {
         mCameraControls.setAutoHdrEnabled(enabled);
     }
@@ -703,11 +668,8 @@ public class PhotoUI extends BaseUI implements PieListener,
     }
 
     public void onPreviewFocusChanged(boolean previewFocused) {
-        if (previewFocused) {
-            showUI();
-        } else {
-            hideUI(true);
-        }
+        super.onPreviewFocusChanged(previewFocused);
+
         if (mFaceView != null) {
             mFaceView.setBlockDraw(!previewFocused);
         }
@@ -721,7 +683,6 @@ public class PhotoUI extends BaseUI implements PieListener,
         if (mPieRenderer != null) {
             mPieRenderer.setBlockFocus(!previewFocused);
         }
-        //setShowMenu(previewFocused);
         if (!previewFocused && mCountDownView != null) mCountDownView.cancelCountDown();
     }
 
@@ -909,12 +870,6 @@ public class PhotoUI extends BaseUI implements PieListener,
         }
     }
 
-    private void setShowMenu(boolean show) {
-        if (mOnScreenIndicators != null) {
-            mOnScreenIndicators.setVisibility(show ? View.VISIBLE : View.GONE);
-        }
-    }
-
     public boolean collapseCameraControls() {
         // TODO: Mode switcher should behave like a popup and should hide itself when there
         // is a touch outside of it.
@@ -937,7 +892,6 @@ public class PhotoUI extends BaseUI implements PieListener,
         mCameraControls.hideCameraSettings();
         mDecodeTaskForReview = new DecodeImageForReview(jpegData, orientation, mirror);
         mDecodeTaskForReview.execute();
-        mOnScreenIndicators.setVisibility(View.GONE);
         CameraUtil.fadeIn(mReviewDoneButton);
         mShutterButton.setVisibility(View.INVISIBLE);
         CameraUtil.fadeIn(mReviewRetakeButton);
@@ -949,7 +903,6 @@ public class PhotoUI extends BaseUI implements PieListener,
             mDecodeTaskForReview.cancel(true);
         }
         mReviewImage.setVisibility(View.GONE);
-        mOnScreenIndicators.setVisibility(View.VISIBLE);
         CameraUtil.fadeOut(mReviewDoneButton);
         mShutterButton.setVisibility(View.VISIBLE);
         CameraUtil.fadeOut(mReviewRetakeButton);
@@ -1165,7 +1118,7 @@ public class PhotoUI extends BaseUI implements PieListener,
     }
 
     @Override
-    public void onFaceDetection(Face[] faces, CameraManager.CameraProxy camera) {
+    public void onFaceDetection(Camera.Face[] faces, CameraManager.CameraProxy camera) {
         mFaceView.setFaces(faces);
     }
 

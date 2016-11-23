@@ -33,9 +33,7 @@ LOCAL_AAPT_FLAGS += --rename-manifest-package org.aoscp.camero
 #LOCAL_SDK_VERSION := current
 LOCAL_RENDERSCRIPT_TARGET_API := 23
 
-ifneq ($(TARGET_CAMERA_APP),Camera2)
 LOCAL_OVERRIDES_PACKAGES := Camera2
-endif
 
 LOCAL_PROGUARD_FLAG_FILES := proguard.flags
 
@@ -50,8 +48,4 @@ endif
 
 include $(BUILD_PACKAGE)
 
-include $(call all-makefiles-under,$(LOCAL_PATH)/jni)
-
-ifeq (,$(ONE_SHOT_MAKEFILE))
-include $(call all-makefiles-under,$(LOCAL_PATH)/tests)
-endif
+include $(call all-makefiles-under, $(LOCAL_PATH))

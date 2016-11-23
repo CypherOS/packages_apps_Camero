@@ -65,11 +65,12 @@ import java.util.TimeZone;
 /**
  * Activity to handle panorama capturing.
  */
-public class WideAnglePanoramaModule
-        implements CameraModule, WideAnglePanoramaController,
+public class WideAnglePanoramaModule extends BaseModule<WideAnglePanoramaUI> implements
+        WideAnglePanoramaController,
         SurfaceTexture.OnFrameAvailableListener {
 
-    public static final int DEFAULT_SWEEP_ANGLE = 160;
+    public static final int DEFAULT_SWEEP_ANGLE_PORTRAIT = 160;
+    public static final int DEFAULT_SWEEP_ANGLE_LANDSCAPE = 270;
     public static final int DEFAULT_BLEND_MODE = Mosaic.BLENDTYPE_HORIZONTAL;
     public static final int DEFAULT_CAPTURE_PIXELS = 1440 * 1080;
 
@@ -93,7 +94,6 @@ public class WideAnglePanoramaModule
     private static final boolean DEBUG = false;
 
     private ContentResolver mContentResolver;
-    private WideAnglePanoramaUI mUI;
 
     private MosaicPreviewRenderer mMosaicPreviewRenderer;
     private Object mRendererLock = new Object();
@@ -124,10 +124,6 @@ public class WideAnglePanoramaModule
     private boolean mCancelComputation;
     private float mHorizontalViewAngle;
     private float mVerticalViewAngle;
-
-    // Prefer FOCUS_MODE_INFINITY to FOCUS_MODE_CONTINUOUS_VIDEO because of
-    // getting a better image quality by the former.
-    private String mTargetFocusMode = Parameters.FOCUS_MODE_INFINITY;
 
     private PanoOrientationEventListener mOrientationEventListener;
     // The value could be 0, 90, 180, 270 for the 4 different orientations measured in clockwise
@@ -358,13 +354,8 @@ public class WideAnglePanoramaModule
 
     @Override
     public void onPreviewFocusChanged(boolean previewFocused) {
+        super.onPreviewFocusChanged(previewFocused);
         mPreviewFocused = previewFocused;
-        mUI.onPreviewFocusChanged(previewFocused);
-    }
-
-    @Override
-    public boolean arePreviewControlsVisible() {
-        return mUI.arePreviewControlsVisible();
     }
 
     /**
@@ -469,12 +460,13 @@ public class WideAnglePanoramaModule
         parameters.setPreviewFpsRange(minFps, maxFps);
         Log.d(TAG, "preview fps: " + minFps + ", " + maxFps);
 
+        // use CAF for viewfinder until starting the real mosaic, then lock
         List<String> supportedFocusModes = parameters.getSupportedFocusModes();
-        if (supportedFocusModes.indexOf(mTargetFocusMode) >= 0) {
-            parameters.setFocusMode(mTargetFocusMode);
+        if (supportedFocusModes.indexOf(Parameters.FOCUS_MODE_CONTINUOUS_PICTURE) >= 0) {
+            parameters.setFocusMode(Parameters.FOCUS_MODE_CONTINUOUS_PICTURE);
         } else {
             // Use the default focus mode and log a message
-            Log.w(TAG, "Cannot set the focus mode to " + mTargetFocusMode +
+            Log.w(TAG, "Cannot set the focus mode to " + Parameters.FOCUS_MODE_CONTINUOUS_PICTURE +
                   " becuase the mode is not supported.");
         }
 
@@ -572,15 +564,28 @@ public class WideAnglePanoramaModule
 
     public void startCapture() {
         // Reset values so we can do this again.
+
+        Parameters parameters = mCameraDevice.getParameters();
+        List<String> supportedFocusModes = parameters.getSupportedFocusModes();
+        if (supportedFocusModes.indexOf(Parameters.FOCUS_MODE_FIXED) >= 0) {
+            parameters.setFocusMode(Parameters.FOCUS_MODE_FIXED);
+        } else {
+            // Use the default focus mode and log a message
+            Log.w(TAG, "Cannot set the focus mode to " + Parameters.FOCUS_MODE_FIXED +
+                  " becuase the mode is not supported.");
+        }
+        parameters.setAutoExposureLock(true);
+        parameters.setAutoWhiteBalanceLock(true);
+        configureCamera(parameters);
+
         mCancelComputation = false;
         mTimeTaken = System.currentTimeMillis();
         mActivity.setSwipingEnabled(false);
         mCaptureState = CAPTURE_STATE_MOSAIC;
         mUI.onStartCapture();
-        Parameters parameters = mCameraDevice.getParameters();
-        parameters.setAutoExposureLock(true);
-        parameters.setAutoWhiteBalanceLock(true);
-        configureCamera(parameters);
+
+        final int sweepAngle = (mDeviceOrientation == 90 || mDeviceOrientation == 270) ?
+                DEFAULT_SWEEP_ANGLE_LANDSCAPE : DEFAULT_SWEEP_ANGLE_PORTRAIT;
 
         mMosaicFrameProcessor.setProgressListener(new MosaicFrameProcessor.ProgressListener() {
             @Override
@@ -590,8 +595,8 @@ public class WideAnglePanoramaModule
                 float accumulatedVerticalAngle = progressY * mVerticalViewAngle;
                 boolean isRotated = !(mDeviceOrientationAtCapture == mDeviceOrientation);
                 if (isFinished
-                        || (Math.abs(accumulatedHorizontalAngle) >= DEFAULT_SWEEP_ANGLE)
-                        || (Math.abs(accumulatedVerticalAngle) >= DEFAULT_SWEEP_ANGLE)
+                        || (Math.abs(accumulatedHorizontalAngle) >= sweepAngle)
+                        || (Math.abs(accumulatedVerticalAngle) >= sweepAngle)
                         || isRotated) {
                     stopCapture(false);
                 } else {
@@ -611,7 +616,7 @@ public class WideAnglePanoramaModule
         mUI.resetCaptureProgress();
         // TODO: calculate the indicator width according to different devices to reflect the actual
         // angle of view of the camera device.
-        mUI.setMaxCaptureProgress(DEFAULT_SWEEP_ANGLE);
+        mUI.setMaxCaptureProgress(sweepAngle);
         mUI.showCaptureProgress();
         mDeviceOrientationAtCapture = mDeviceOrientation;
         keepScreenOn();
@@ -629,6 +634,14 @@ public class WideAnglePanoramaModule
         Parameters parameters = mCameraDevice.getParameters();
         parameters.setAutoExposureLock(false);
         parameters.setAutoWhiteBalanceLock(false);
+        List<String> supportedFocusModes = parameters.getSupportedFocusModes();
+        if (supportedFocusModes.indexOf(Parameters.FOCUS_MODE_CONTINUOUS_PICTURE) >= 0) {
+            parameters.setFocusMode(Parameters.FOCUS_MODE_CONTINUOUS_PICTURE);
+        } else {
+            // Use the default focus mode and log a message
+            Log.w(TAG, "Cannot set the focus mode to " + Parameters.FOCUS_MODE_CONTINUOUS_PICTURE +
+                  " becuase the mode is not supported.");
+        }
         configureCamera(parameters);
 
         mMosaicFrameProcessor.setProgressListener(null);
@@ -640,7 +653,7 @@ public class WideAnglePanoramaModule
             mUI.showWaitingDialog(mPreparePreviewString);
             // Hide shutter button, shutter icon, etc when waiting for
             // panorama to stitch
-            mUI.hideUI();
+            mUI.hideUI(true);
             runBackgroundThread(new Thread() {
                 @Override
                 public void run() {
@@ -706,13 +719,21 @@ public class WideAnglePanoramaModule
                     } catch (InterruptedException e) {
                         throw new RuntimeException("Panorama reportProgress failed", e);
                     }
-                    // Update the progress bar
-                    mActivity.runOnUiThread(new Runnable() {
-                        @Override
-                        public void run() {
-                            mUI.updateSavingProgress(progress);
-                        }
-                    });
+                    // Update the progress bar if we haven't paused.  In the case where
+                    // we pause the UI, then launch the camera from the lockscreen with
+                    // this thread still running, a new WideAnglePanoramaModule is
+                    // created, but this thread is left running to finish the task (and
+                    // mPaused continues to be true for that instance.
+                    if (!mPaused) {
+                        mActivity.runOnUiThread(new Runnable() {
+                            @Override
+                            public void run() {
+                                if (!mPaused) {
+                                    mUI.updateSavingProgress(progress);
+                                }
+                            }
+                        });
+                    }
                 }
             }
         };
@@ -1142,6 +1163,13 @@ public class WideAnglePanoramaModule
             mCameraTexture.setOnFrameAvailableListener(this);
             mCameraDevice.setPreviewTexture(mCameraTexture);
         }
+        mCameraDevice.setOneShotPreviewCallback(mMainHandler,
+                new CameraManager.CameraPreviewDataCallback() {
+                    @Override
+                    public void onPreviewFrame(byte[] data, CameraProxy camera) {
+                        mUI.hidePreviewCover();
+                    }
+                });
         mCameraDevice.startPreview();
         mCameraState = PREVIEW_ACTIVE;
     }
@@ -1215,7 +1243,7 @@ public class WideAnglePanoramaModule
 
     @Override
     public void cancelHighResStitching() {
-        if (mPaused || mCameraTexture == null) return;
+        if (mPaused) return;
         cancelHighResComputation();
     }
 
@@ -1303,20 +1331,5 @@ public class WideAnglePanoramaModule
     @Override
     public void onMediaSaveServiceConnected(MediaSaveService s) {
         // do nothing.
-    }
-
-    @Override
-    public void showPreviewCover() {
-        mUI.showPreviewCover();
-    }
-
-    @Override
-    public void hidePreviewCover() {
-        mUI.hidePreviewCover();
-    }
-
-    @Override
-    public void setPreviewCoverAlpha(float alpha) {
-        mUI.setPreviewCoverAlpha(alpha);
     }
 }

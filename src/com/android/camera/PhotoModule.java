@@ -110,8 +110,7 @@ import android.graphics.Color;
 import android.graphics.Paint;
 import android.os.SystemProperties;
 
-public class PhotoModule
-        implements CameraModule,
+public class PhotoModule extends BaseModule<PhotoUI> implements
         PhotoController,
         FocusOverlayManager.Listener,
         CameraPreference.OnPreferenceChangedListener,
@@ -170,8 +169,6 @@ public class PhotoModule
     private Parameters mParameters;
     private boolean mPaused;
     private View mRootView;
-
-    private PhotoUI mUI;
 
     // The activity is going to switch to the specified camera id. This is
     // needed because texture copy is done in GL thread. -1 means camera is not
@@ -525,8 +522,6 @@ public class PhotoModule
 
                case SET_PHOTO_UI_PARAMS: {
                     setCameraParametersWhenIdle(UPDATE_PARAM_PREFERENCE);
-                    mUI.updateOnScreenIndicators(mParameters, mPreferenceGroup,
-                        mPreferences);
                     break;
                }
 
@@ -2598,8 +2593,6 @@ public class PhotoModule
         }
         mUI.initDisplayChangeListener();
         keepScreenOnAwhile();
-        mUI.updateOnScreenIndicators(mParameters, mPreferenceGroup,
-                        mPreferences);
 
         UsageStatistics.onContentViewChanged(
                 UsageStatistics.COMPONENT_CAMERA, "PhotoModule");
@@ -3690,6 +3683,7 @@ public class PhotoModule
                 }
             });
             mCameraDevice.setHistogramMode(mHistogramEnabled ? mStatsCallback : null);
+            mParameters.set("histogram", histogram);
         }
 
         setFlipValue();
@@ -4810,8 +4804,6 @@ public class PhotoModule
          * later by posting a message to the handler */
         if (mUI.mMenuInitialized) {
             setCameraParametersWhenIdle(UPDATE_PARAM_PREFERENCE);
-            mUI.updateOnScreenIndicators(mParameters, mPreferenceGroup,
-                mPreferences);
             mActivity.initPowerShutter(mPreferences);
             mActivity.initMaxBrightness(mPreferences);
         } else {
@@ -4970,22 +4962,10 @@ public class PhotoModule
             mHeading += 360;
         }
     }
-    @Override
-    public void onPreviewFocusChanged(boolean previewFocused) {
-        mUI.onPreviewFocusChanged(previewFocused);
-    }
+
     // TODO: Delete this function after old camera code is removed
     @Override
     public void onRestorePreferencesClicked() {}
-
-/*
- * Provide a mapping for Jpeg encoding quality levels
- * from String representation to numeric representation.
- */
-    @Override
-    public boolean arePreviewControlsVisible() {
-        return mUI.arePreviewControlsVisible();
-    }
 
     // For debugging only.
     public void setDebugUri(Uri uri) {
@@ -5025,22 +5005,17 @@ public class PhotoModule
 
     @Override
     public void showPreviewCover() {
+        super.showPreviewCover();
         disableAutoFocusMoveCallback();
         stopFaceDetection();
         mUI.getFocusRing().stopFocusAnimations();
-        mUI.showPreviewCover();
     }
 
     @Override
     public void hidePreviewCover() {
-        mUI.hidePreviewCover();
+        super.showPreviewCover();
         startFaceDetection();
         updateAutoFocusMoveCallback();
-    }
-
-    @Override
-    public void setPreviewCoverAlpha(float alpha) {
-        mUI.setPreviewCoverAlpha(alpha);
     }
 
     public void onMakeupLevelSync(String key, String value) {
